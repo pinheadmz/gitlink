@@ -1,0 +1,15 @@
+{
+  "name": "gitlink",
+  "version": "1.0.0",
+  "description": "Link github to slack",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Matthew Zipkin",
+  "license": "MIT",
+  "dependencies": {
+    "bcurl": "^0.1.5",
+    "bweb": "^0.1.7"
+  }
+}
