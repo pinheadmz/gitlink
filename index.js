@@ -66,9 +66,9 @@ function handlePR(body, action) {
   const msg = body.pull_request.body;
 
   if (action !== 'closed')
-    slack(`\n:leftwards_arrow_with_hook: ${user} ${action} a pull request:\n"${title}"\n${msg}\n${url}`)
+    slack(`:leftwards_arrow_with_hook: ${user} ${action} a pull request: "${title}"\n${msg}\n${url}`)
   else
-    slack(`\n:white_check_mark: ${user} ${action} a pull request:\n"${title}"\n${url}`)
+    slack(`:white_check_mark: ${user} ${action} a pull request: "${title}"\n${url}`)
 }
 
 function handleIssue(body, action) {
@@ -78,9 +78,9 @@ function handleIssue(body, action) {
   const msg = body.issue.body;
 
   if (action !== 'closed')
-    slack(`\n:warning: ${user} ${action} an issue:\n"${title}"\n${msg}\n${url}`)
+    slack(`:warning: ${user} ${action} an issue: "${title}"\n${msg}\n${url}`)
   else
-    slack(`\n:white_check_mark: ${user} ${action} an issue:\n"${title}"\n${url}`)
+    slack(`:white_check_mark: ${user} ${action} an issue: "${title}"\n${url}`)
 }
 
 
