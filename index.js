@@ -37,52 +37,98 @@ function handleMessage(body) {
   const keys = Object.keys(body);
   const action = body.action;
 
-  console.log(`Received JSON with: ${keys}`)
+  console.log(`Received JSON with: ${keys} -- action = ${action}`)
 
-  if (keys.indexOf('comment') !== -1)
+  if (keys.indexOf('changes') !== -1)
+    return false;
+
+  if (keys.indexOf('review') !== -1)
+    handleReview(body, action);
+  else if (keys.indexOf('comment') !== -1)
     handleComment(body, action);
   else if (keys.indexOf('pull_request') !== -1)
     handlePR(body, action);
   else if (keys.indexOf('issue') !== -1)
     handleIssue(body, action);
+  else if (keys.indexOf('forkee') !== -1)
+    handleFork(body, action);
   else
     return false;
 }
 
-function handleComment(body, action) {
-  const url = body.issue.html_url;
-  const user = body.issue.user.login;
-  const title = body.issue.title;
-  const msg = body.comment.body;
-  const thing = body.issue.pull_request ? 'pull request' : 'issue';
+function handleReview(body, action) {
+  handleComment(body, action);
+}
 
-  slack(`\n:speech_balloon: ${user} commented on ${thing} "${title}":\n${msg}\n${url}`)
+function handleComment(body, action) {  
+  if (action === 'deleted')
+    return false;
+
+  let thing;
+  let url;
+  let title;
+  let msg;
+  const user = body.sender.login;
+  if (body.comment) {
+    msg = trimMsg(body.comment.body);
+  } else {
+    msg = trimMsg(body.review.body);
+  }
+
+  if (body.issue) {
+    url = body.issue.html_url;
+    title = body.issue.title;
+    thing = body.issue.pull_request ? 'pull request' : 'issue';
+  } else {
+    url = body.pull_request.html_url;
+    title = body.pull_request.title;
+    thing = 'pull request';
+  }
+
+  if (msg.indexOf('# [Codecov]') === -1)
+    slack(`\n:speech_balloon: ${user} commented on ${thing} "${title}":\n(${url})\n${msg}`);
 }
 
 function handlePR(body, action) {
   const url = body.pull_request.html_url;
-  const user = body.pull_request.user.login;
+  const user = body.sender.login;
   const title = body.pull_request.title;
-  const msg = body.pull_request.body;
+  const msg = trimMsg(body.pull_request.body);
 
-  if (action !== 'closed')
-    slack(`:leftwards_arrow_with_hook: ${user} ${action} a pull request: "${title}"\n${msg}\n${url}`)
+  if (action === 'closed')
+    slack(`:white_check_mark: ${user} ${action} a pull request: "${title}"\n(${url})`);
+  else if (action === 'synchronize' || action === 'edited')
+    slack(`:leftwards_arrow_with_hook: ${user} ${action} a pull request: "${title}"\n(${url})`);
   else
-    slack(`:white_check_mark: ${user} ${action} a pull request: "${title}"\n${url}`)
+    slack(`:leftwards_arrow_with_hook: ${user} ${action} a pull request: "${title}"\n(${url})\n${msg}`);
 }
 
 function handleIssue(body, action) {
   const url = body.issue.html_url;
-  const user = body.issue.user.login;
+  const user = body.sender.login;
   const title = body.issue.title;
-  const msg = body.issue.body;
+  const msg = trimMsg(body.issue.body);
+
+  if (action === 'labeled')
+    return false;
 
   if (action !== 'closed')
-    slack(`:warning: ${user} ${action} an issue: "${title}"\n${msg}\n${url}`)
+    slack(`:warning: ${user} ${action} an issue: "${title}"\n(${url})\n${msg}`);
   else
-    slack(`:white_check_mark: ${user} ${action} an issue: "${title}"\n${url}`)
+    slack(`:white_check_mark: ${user} ${action} an issue: "${title}"\n(${url})`);
 }
 
+function handleFork(body, action) {
+  const url = body.forkee.html_url;
+  const user = body.sender.login;
+  const title = body.forkee.name;
+
+  slack(`:gemini: ${user} forked: ${title}\n(${url})`);
+}
+
+function trimMsg(msg) {
+  return msg.length < 500 ? msg : (msg.substring(0,500) + '\n...');
+}
 
 // send messages to slackbot
 const curlClient = new Client({
