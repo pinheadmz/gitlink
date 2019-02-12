@@ -38,13 +38,14 @@ function handleMessage(body) {
   const action = body.action;
 
   console.log(`Received JSON with: ${keys} -- action = ${action}`)
-
-  if (keys.indexOf('changes') !== -1)
+  
+  if (action === 'labeled' || action === 'assigned')
     return false;
 
-  if (keys.indexOf('review') !== -1)
-    handleReview(body, action);
-  else if (keys.indexOf('comment') !== -1)
+  if (keys.indexOf('changes') !== -1 || keys.indexOf('review') !== -1 )
+    return false;
+
+  if (keys.indexOf('comment') !== -1)
     handleComment(body, action);
   else if (keys.indexOf('pull_request') !== -1)
     handlePR(body, action);
@@ -95,10 +96,14 @@ function handlePR(body, action) {
   const title = body.pull_request.title;
   const msg = trimMsg(body.pull_request.body);
 
-  if (action === 'closed')
+  if (action === 'closed' && body.pull_request.merged)
+    slack(`:merged: ${user} merged a pull request: "${title}"\n(${url})`);
+  else if (action === 'closed' && !body.pull_request.merged)
     slack(`:white_check_mark: ${user} ${action} a pull request: "${title}"\n(${url})`);
-  else if (action === 'synchronize' || action === 'edited')
+  else if (action === 'edited')
     slack(`:leftwards_arrow_with_hook: ${user} ${action} a pull request: "${title}"\n(${url})`);
+  else if (action === 'synchronize')
+    slack(`:leftwards_arrow_with_hook: ${user} synchronized a pull request: "${title}"\n(${url})`);
   else
     slack(`:leftwards_arrow_with_hook: ${user} ${action} a pull request: "${title}"\n(${url})\n${msg}`);
 }
@@ -108,9 +113,6 @@ function handleIssue(body, action) {
   const user = body.sender.login;
   const title = body.issue.title;
   const msg = trimMsg(body.issue.body);
-
-  if (action === 'labeled')
-    return false;
 
   if (action !== 'closed')
     slack(`:warning: ${user} ${action} an issue: "${title}"\n(${url})\n${msg}`);
