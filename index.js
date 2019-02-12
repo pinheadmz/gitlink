@@ -4,7 +4,21 @@ const bweb = require('bweb');
 const { Client } = require('bcurl');
 const { password, slakckbotPath } = require('./config');
 
-// create server to listen for webhooks
+// ** CUSTOM SETTINGS **
+const ignoreActions = [
+  'labeled',
+  'assigned',
+  'review_requested',
+  'deleted'
+];
+
+const ignoreKeys = [
+  'changes',
+  'review'
+];
+// *********************
+
+// Create server to listen for webhooks
 const server = bweb.server({
   host: '0.0.0.0',
   port: 8080,
@@ -31,20 +45,39 @@ server.post('/', (req, res) => {
 
 server.open();
 
+// send messages to slackbot
+const curlClient = new Client({
+  path: slakckbotPath,
+  host: 'hooks.slack.com'
+});
 
-// handle messages
+async function slack(msg) {
+  try {
+    await curlClient.post('/', {"text": msg});
+  } catch (e) {
+    ;
+  }
+}
+
+// Handle all incoming messages
 function handleMessage(body) {
   const keys = Object.keys(body);
   const action = body.action;
 
   console.log(`Received JSON with: ${keys} -- action = ${action}`)
   
-  if (action === 'labeled' || action === 'assigned')
+  // Ignore some actions
+  if (ignoreActions.indexOf(action) !== -1)
     return false;
 
-  if (keys.indexOf('changes') !== -1 || keys.indexOf('review') !== -1 )
-    return false;
+  // Ignore some payloads (detected by containing certain keys)
+  for (const key of ignoreKeys) {
+    if (keys.indexOf(key) !== -1)
+      return false;
+  }
 
+  // Only way to know what type of payload GitHub sent us is to check all the
+  // keys in the object. Some have more than one so we need to check in order.
   if (keys.indexOf('comment') !== -1)
     handleComment(body, action);
   else if (keys.indexOf('pull_request') !== -1)
@@ -62,86 +95,92 @@ function handleReview(body, action) {
 }
 
 function handleComment(body, action) {  
-  if (action === 'deleted')
-    return false;
+  const user = body.sender.login;
 
   let thing;
   let url;
   let title;
   let msg;
-  const user = body.sender.login;
+
+  // Comment text is either in a "comment" or a "review" object
   if (body.comment) {
     msg = trimMsg(body.comment.body);
   } else {
     msg = trimMsg(body.review.body);
   }
 
+  // What's being commented ON is either an issue or a pull request
   if (body.issue) {
+    // Comments on issues or PRs get caught here...
     url = body.issue.html_url;
     title = body.issue.title;
     thing = body.issue.pull_request ? 'pull request' : 'issue';
   } else {
+    // ...but PR "review" comments get caught here
     url = body.pull_request.html_url;
     title = body.pull_request.title;
     thing = 'pull request';
   }
 
+  // Ignore comments from the CI
   if (msg.indexOf('# [Codecov]') === -1)
     slack(`\n:speech_balloon: ${user} commented on ${thing} "${title}":\n(${url})\n${msg}`);
 }
 
 function handlePR(body, action) {
   const url = body.pull_request.html_url;
-  const user = body.sender.login;
   const title = body.pull_request.title;
+
+  const user = body.sender.login;
+
   const msg = trimMsg(body.pull_request.body);
 
-  if (action === 'closed' && body.pull_request.merged)
-    slack(`:merged: ${user} merged a pull request: "${title}"\n(${url})`);
-  else if (action === 'closed' && !body.pull_request.merged)
-    slack(`:white_check_mark: ${user} ${action} a pull request: "${title}"\n(${url})`);
-  else if (action === 'edited')
-    slack(`:leftwards_arrow_with_hook: ${user} ${action} a pull request: "${title}"\n(${url})`);
-  else if (action === 'synchronize')
-    slack(`:leftwards_arrow_with_hook: ${user} synchronized a pull request: "${title}"\n(${url})`);
-  else
-    slack(`:leftwards_arrow_with_hook: ${user} ${action} a pull request: "${title}"\n(${url})\n${msg}`);
+  switch(action) {
+    case 'closed':
+      if (body.pull_request.merged)
+        slack(`:merged: ${user} merged a pull request: "${title}"\n(${url})`);
+      else
+        slack(`:white_check_mark: ${user} closed a pull request: "${title}"\n(${url})`);
+      break;
+    case 'edited':
+      slack(`:leftwards_arrow_with_hook: ${user} edited a pull request: "${title}"\n(${url})`);
+      break;
+    case 'synchronize':
+      slack(`:leftwards_arrow_with_hook: ${user} synchronized a pull request: "${title}"\n(${url})`);
+      break;
+    default:
+      slack(`:leftwards_arrow_with_hook: ${user} ${action} a pull request: "${title}"\n(${url})\n${msg}`);
+      break;
+  }
 }
 
 function handleIssue(body, action) {
   const url = body.issue.html_url;
-  const user = body.sender.login;
   const title = body.issue.title;
+
+  const user = body.sender.login;
+
   const msg = trimMsg(body.issue.body);
 
-  if (action !== 'closed')
-    slack(`:warning: ${user} ${action} an issue: "${title}"\n(${url})\n${msg}`);
-  else
-    slack(`:white_check_mark: ${user} ${action} an issue: "${title}"\n(${url})`);
+  switch (action) {
+    case 'closed':
+      slack(`:white_check_mark: ${user} closed an issue: "${title}"\n(${url})`);
+      break;
+    default:
+      slack(`:warning: ${user} ${action} an issue: "${title}"\n(${url})\n${msg}`);
+      break;  
+  }
 }
 
 function handleFork(body, action) {
   const url = body.forkee.html_url;
-  const user = body.sender.login;
   const title = body.forkee.name;
+
+  const user = body.sender.login;
 
   slack(`:gemini: ${user} forked: ${title}\n(${url})`);
 }
 
 function trimMsg(msg) {
   return msg.length < 500 ? msg : (msg.substring(0,500) + '\n...');
-}
-
-// send messages to slackbot
-const curlClient = new Client({
-  path: slakckbotPath,
-  host: 'hooks.slack.com'
-});
-
-async function slack(msg) {
-  try {
-    await curlClient.post('/', {"text": msg});
-  } catch (e) {
-    ;
-  }
 }
