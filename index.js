@@ -6,15 +6,16 @@ const { password, slakckbotPath } = require('./config');
 
 // ** CUSTOM SETTINGS **
 const ignoreActions = [
+  'unlabeled',
   'labeled',
   'assigned',
+  'unassigned',
   'review_requested',
   'deleted'
 ];
 
 const ignoreKeys = [
-  'changes',
-  'review'
+  'changes'
 ];
 // *********************
 
@@ -80,6 +81,8 @@ function handleMessage(body) {
   // keys in the object. Some have more than one so we need to check in order.
   if (keys.indexOf('comment') !== -1)
     handleComment(body, action);
+  else if (keys.indexOf('review') !== -1)
+    handleReview(body, action);
   else if (keys.indexOf('pull_request') !== -1)
     handlePR(body, action);
   else if (keys.indexOf('issue') !== -1)
@@ -91,7 +94,14 @@ function handleMessage(body) {
 }
 
 function handleReview(body, action) {
-  handleComment(body, action);
+  const user = body.sender.login;
+  const url = body.pull_request.html_url;
+  const title = body.pull_request.title;
+
+  if (action === 'submitted' && body.review.state === 'approved')
+    slack(`:thumbsup: ${user} approved a pull request: "${title}"\n(${url})`);
+  else if (action === 'submitted' && body.review.state === 'changes_requested')
+    slack(`:thinking_face: ${user} requested changes to a pull request: "${title}"\n(${url})`);
 }
 
 function handleComment(body, action) {  
@@ -124,7 +134,7 @@ function handleComment(body, action) {
 
   // Ignore comments from the CI
   if (msg.indexOf('# [Codecov]') === -1)
-    slack(`\n:speech_balloon: ${user} commented on ${thing} "${title}":\n(${url})\n${msg}`);
+    slack(`:speech_balloon: ${user} commented on ${thing} "${title}":\n(${url})\n${msg}`);
 }
 
 function handlePR(body, action) {
@@ -149,7 +159,7 @@ function handlePR(body, action) {
       slack(`:leftwards_arrow_with_hook: ${user} synchronized a pull request: "${title}"\n(${url})`);
       break;
     default:
-      slack(`:leftwards_arrow_with_hook: ${user} ${action} a pull request: "${title}"\n(${url})\n${msg}`);
+      slack(`:memo: ${user} ${action} a pull request: "${title}"\n(${url})\n${msg}`);
       break;
   }
 }
