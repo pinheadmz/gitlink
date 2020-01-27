@@ -65,8 +65,14 @@ function handleMessage(body) {
   const keys = Object.keys(body);
   const action = body.action;
 
-  console.log(`Received JSON with: ${keys} -- action = ${action}`)
-  
+  console.log(`Received JSON with: ${keys} -- action = ${action}`);
+
+  // Ignore private repos
+  if (body.repository.private) {
+    console.log(`Ignoring private repo: ${body.repository.name}`);
+    return false;
+  }
+
   // Ignore some actions
   if (ignoreActions.indexOf(action) !== -1)
     return false;
@@ -89,9 +95,27 @@ function handleMessage(body) {
     handleIssue(body, action);
   else if (keys.indexOf('forkee') !== -1)
     handleFork(body, action);
+  else if (keys.indexOf('base_ref') !== -1)
+    handlePush(body);
   else
     return false;
 }
+
+function handlePush(body) {
+  console.log(body);
+
+  if (body.deleted)
+    return false;
+
+  const ref = body.ref.split('/').slice(-1)[0];
+  const repo = body.repository.full_name;
+  const msg = body.head_commit.message;
+  const user = body.sender.login;
+  const url = body.compare;
+
+  slack(`:eight_spoked_asterisk: ${user} pushed commits to a branch: ${repo}:${ref}\n(${url})\n${msg}`);
+}
+
 
 function handleReview(body, action) {
   const user = body.sender.login;
@@ -122,12 +146,12 @@ function handleComment(body, action) {
   // What's being commented ON is either an issue or a pull request
   if (body.issue) {
     // Comments on issues or PRs get caught here...
-    url = body.issue.html_url;
+    url = body.comment.html_url;
     title = body.issue.title;
     thing = body.issue.pull_request ? 'pull request' : 'issue';
   } else {
     // ...but PR "review" comments get caught here
-    url = body.pull_request.html_url;
+    url = body.comment.html_url;
     title = body.pull_request.title;
     thing = 'pull request';
   }
