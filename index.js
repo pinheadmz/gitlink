@@ -11,7 +11,8 @@ const ignoreActions = [
   'assigned',
   'unassigned',
   'review_requested',
-  'deleted'
+  'deleted',
+  'milestoned'
 ];
 
 const ignoreKeys = [
@@ -54,7 +55,7 @@ const curlClient = new Client({
 
 async function slack(msg) {
   try {
-    await curlClient.post('/', {"text": msg});
+    await curlClient.post('/', {'text': msg});
   } catch (e) {
     ;
   }
@@ -70,17 +71,17 @@ function handleMessage(body) {
   // Ignore private repos
   if (body.repository.private) {
     console.log(`Ignoring private repo: ${body.repository.name}`);
-    return false;
+    return;
   }
 
   // Ignore some actions
   if (ignoreActions.indexOf(action) !== -1)
-    return false;
+    return;
 
   // Ignore some payloads (detected by containing certain keys)
   for (const key of ignoreKeys) {
     if (keys.indexOf(key) !== -1)
-      return false;
+      return;
   }
 
   // Only way to know what type of payload GitHub sent us is to check all the
@@ -98,14 +99,12 @@ function handleMessage(body) {
   else if (keys.indexOf('base_ref') !== -1)
     handlePush(body);
   else
-    return false;
+    return;
 }
 
 function handlePush(body) {
-  console.log(body);
-
   if (body.deleted)
-    return false;
+    return;
 
   const ref = body.ref.split('/').slice(-1)[0];
   const repo = body.repository.full_name;
@@ -113,22 +112,28 @@ function handlePush(body) {
   const user = body.sender.login;
   const url = body.compare;
 
-  slack(`:eight_spoked_asterisk: ${user} pushed commits to a branch: ${repo}:${ref}\n(${url})\n${msg}`);
+  slack(
+    `:eight_spoked_asterisk: ${user} pushed commits to a branch:`
+    + ` ${repo}:${ref}\n(${url})\n${msg}`);
 }
-
 
 function handleReview(body, action) {
   const user = body.sender.login;
   const url = body.pull_request.html_url;
   const title = body.pull_request.title;
 
-  if (action === 'submitted' && body.review.state === 'approved')
+  if (action === 'submitted' && body.review.state === 'approved') {
     slack(`:thumbsup: ${user} approved a pull request: "${title}"\n(${url})`);
-  else if (action === 'submitted' && body.review.state === 'changes_requested')
-    slack(`:thinking_face: ${user} requested changes to a pull request: "${title}"\n(${url})`);
+  } else if (
+      action === 'submitted'
+      && body.review.state === 'changes_requested') {
+    slack(
+      `:thinking_face: ${user} requested changes to a pull request:`
+      + ` "${title}"\n(${url})`);
+  }
 }
 
-function handleComment(body, action) {  
+function handleComment(body, action) {
   const user = body.sender.login;
 
   let thing;
@@ -157,8 +162,11 @@ function handleComment(body, action) {
   }
 
   // Ignore comments from the CI
-  if (msg.indexOf('# [Codecov]') === -1)
-    slack(`:speech_balloon: ${user} commented on ${thing} "${title}":\n(${url})\n${msg}`);
+  if (msg.indexOf('# [Codecov]') === -1) {
+    slack(
+      `:speech_balloon: ${user} commented on ${thing}`
+      + ` "${title}":\n(${url})\n${msg}`);
+  }
 }
 
 function handlePR(body, action) {
@@ -171,19 +179,33 @@ function handlePR(body, action) {
 
   switch(action) {
     case 'closed':
-      if (body.pull_request.merged)
+      if (body.pull_request.merged) {
         slack(`:merged: ${user} merged a pull request: "${title}"\n(${url})`);
-      else
-        slack(`:white_check_mark: ${user} closed a pull request: "${title}"\n(${url})`);
+      } else {
+        slack(
+          `:white_check_mark: ${user} closed a pull request:`
+          + ` "${title}"\n(${url})`);
+      }
       break;
     case 'edited':
-      slack(`:leftwards_arrow_with_hook: ${user} edited a pull request: "${title}"\n(${url})`);
+      slack(
+        `:leftwards_arrow_with_hook: ${user} edited a pull request:`
+        + ` "${title}"\n(${url})`);
       break;
     case 'synchronize':
-      slack(`:leftwards_arrow_with_hook: ${user} synchronized a pull request: "${title}"\n(${url})`);
+      slack(
+        `:leftwards_arrow_with_hook: ${user} synchronized a pull request:`
+        + ` "${title}"\n(${url})`);
+      break;
+    case 'ready_for_review':
+      slack(
+        `:wave: ${user}'s pull request is ready for review:`
+        + ` "${title}"\n(${url})`);
       break;
     default:
-      slack(`:memo: ${user} ${action} a pull request: "${title}"\n(${url})\n${msg}`);
+      slack(
+        `:memo: ${user} ${action} a pull request:`
+        + ` "${title}"\n(${url})\n${msg}`);
       break;
   }
 }
@@ -198,11 +220,15 @@ function handleIssue(body, action) {
 
   switch (action) {
     case 'closed':
-      slack(`:white_check_mark: ${user} closed an issue: "${title}"\n(${url})`);
+      slack(
+        `:white_check_mark: ${user} closed an issue:`
+        + ` "${title}"\n(${url})`);
       break;
     default:
-      slack(`:warning: ${user} ${action} an issue: "${title}"\n(${url})\n${msg}`);
-      break;  
+      slack(
+        `:warning: ${user} ${action} an issue:`
+        + ` "${title}"\n(${url})\n${msg}`);
+      break;
   }
 }
 
