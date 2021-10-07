@@ -12,7 +12,8 @@ const ignoreActions = [
   'unassigned',
   'review_requested',
   'deleted',
-  'milestoned'
+  'milestoned',
+  'demilestoned'
 ];
 
 const ignoreKeys = [
@@ -222,6 +223,16 @@ function handleIssue(body, action) {
     case 'closed':
       slack(
         `:white_check_mark: ${user} closed an issue:`
+        + ` "${title}"\n(${url})`);
+      break;
+    case 'locked':
+      slack(
+        `:lock: ${user} locked an issue:`
+        + ` "${title}"\n(${url})`);
+      break;
+    case 'unlocked':
+      slack(
+        `:unlock: ${user} unlocked an issue:`
         + ` "${title}"\n(${url})`);
       break;
     default:
