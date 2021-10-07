@@ -1,8 +1,15 @@
 'use strict';
 
+const request = require('request');
 const bweb = require('bweb');
 const { Client } = require('bcurl');
-const { password, slakckbotPath } = require('./config');
+const {
+  password,
+  slakckbotPath,
+  port,
+  telegrambot,
+  chat_id,
+} = require('./config');
 
 // ** CUSTOM SETTINGS **
 const ignoreActions = [
@@ -24,7 +31,7 @@ const ignoreKeys = [
 // Create server to listen for webhooks
 const server = bweb.server({
   host: '0.0.0.0',
-  port: 8080,
+  port,
   sockets: false
 });
 
@@ -56,10 +63,51 @@ const curlClient = new Client({
 
 async function slack(msg) {
   try {
+    msg = msg.replace(':eight_spoked_asterisk:', '✳️');
+    msg = msg.replace(':thumbsup:', '👍');
+    msg = msg.replace(':thinking_face:', '🤔');
+    msg = msg.replace(':merged:', '🚀');
+    msg = msg.replace(':white_check_mark:', '✅');
+    msg = msg.replace(':leftwards_arrow_with_hook:', '↩️');
+    msg = msg.replace(':wave:', '👋');
+    msg = msg.replace(':memo:', '📝');
+    msg = msg.replace(':locked:', '🔒');
+    msg = msg.replace(':unlocked:', '🔓');
+    msg = msg.replace(':unlock:', '🔓');
+    msg = msg.replace(':warning:', '⚠️');
+    msg = msg.replace(':gemini:', '♊️');
+    msg = msg.replace(':speech_balloon:', '💬');
+
+    telegram(msg);
+  } catch (e) {
+    ;
+  }
+
+  try {
     await curlClient.post('/', {'text': msg});
   } catch (e) {
     ;
   }
+}
+
+function telegram(msg) {
+  const data = ({
+    chat_id,
+    text: msg,
+    disable_web_page_preview: 'true'
+  });
+
+  request.post(
+    telegrambot,
+    {
+      json: true,
+      body: data
+    },
+    (error, response, body) => {
+      if (error)
+        console.error('error:', error);
+    }
+  );
 }
 
 // Handle all incoming messages
@@ -163,7 +211,11 @@ function handleComment(body, action) {
   }
 
   // Ignore comments from the CI
-  if (msg.indexOf('# [Codecov]') === -1) {
+  if (
+    msg.indexOf('# [Codecov]') === -1 &&
+    msg.indexOf('## Pull Request Test Coverage Report') === -1
+  ) {
+
     slack(
       `:speech_balloon: ${user} commented on ${thing}`
       + ` "${title}":\n(${url})\n${msg}`);

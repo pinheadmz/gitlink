@@ -10,6 +10,7 @@
   "license": "MIT",
   "dependencies": {
     "bcurl": "^0.1.5",
-    "bweb": "^0.1.7"
+    "bweb": "^0.1.7",
+    "request": "^2.88.2"
   }
 }
