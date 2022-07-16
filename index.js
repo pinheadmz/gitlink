@@ -305,5 +305,8 @@ function handleFork(body, action) {
 }
 
 function trimMsg(msg) {
-  return msg.length < 500 ? msg : (msg.substring(0,500) + '\n...');
+  if (msg)
+    return msg.length < 500 ? msg : (msg.substring(0,500) + '\n...');
+  else
+    return msg;
 }
