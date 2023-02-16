@@ -13,6 +13,7 @@ const {
 
 // ** CUSTOM SETTINGS **
 const ignoreActions = [
+  'synchronize',
   'unlabeled',
   'labeled',
   'assigned',
@@ -133,6 +134,15 @@ function handleMessage(body) {
       return;
   }
 
+  // Ignore bot
+  if (body && body.sender && body.sender.login === 'DrahtBot')
+    return;
+
+  // Special case for GUI repo
+  const isGUI = (body.repository && body.repository.full_name === 'bitcoin-core/gui');
+  if (isGUI)
+    console.log('repo is GUI');
+
   // Only way to know what type of payload GitHub sent us is to check all the
   // keys in the object. Some have more than one so we need to check in order.
   if (keys.indexOf('comment') !== -1)
@@ -145,13 +155,16 @@ function handleMessage(body) {
     handleIssue(body, action);
   else if (keys.indexOf('forkee') !== -1)
     handleFork(body, action);
-  else if (keys.indexOf('base_ref') !== -1)
+  else if (keys.indexOf('base_ref') !== -1 && !isGUI)
     handlePush(body);
   else
     return;
 }
 
 function handlePush(body) {
+  console.log('ignoring push-commits');
+  return;
+
   if (body.deleted)
     return;
 
