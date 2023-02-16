@@ -163,7 +163,7 @@ function handleMessage(body) {
 
 function handlePush(body) {
   console.log('ignoring push-commits');
-  return;
+  breturn;
 
   if (body.deleted)
     return;
@@ -183,15 +183,23 @@ function handleReview(body, action) {
   const user = body.sender.login;
   const url = body.pull_request.html_url;
   const title = body.pull_request.title;
+  let msg;
+
+  // Comment text is either in a "comment" or a "review" object
+  if (body.comment) {
+    msg = trimMsg(body.comment.body);
+  } else {
+    msg = trimMsg(body.review.body);
+  }
 
   if (action === 'submitted' && body.review.state === 'approved') {
-    slack(`:thumbsup: ${user} approved a pull request: "${title}"\n(${url})`);
+    slack(`:thumbsup: ${user} approved a pull request: "${title}"\n(${url})\n${msg}`);
   } else if (
       action === 'submitted'
       && body.review.state === 'changes_requested') {
     slack(
       `:thinking_face: ${user} requested changes to a pull request:`
-      + ` "${title}"\n(${url})`);
+      + ` "${title}"\n(${url})\n${msg}`);
   }
 }
 
