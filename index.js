@@ -1,3 +1,4 @@
+/* eslint max-len: off */
 'use strict';
 
 const request = require('request');
@@ -7,8 +8,7 @@ const {
   password,
   slakckbotPath,
   port,
-  telegrambot,
-  chat_id,
+  telegrambot
 } = require('./config');
 
 // ** CUSTOM SETTINGS **
@@ -19,6 +19,7 @@ const ignoreActions = [
   'assigned',
   'unassigned',
   'review_requested',
+  'review_request_removed',
   'deleted',
   'milestoned',
   'demilestoned'
@@ -63,6 +64,8 @@ const curlClient = new Client({
 });
 
 async function slack(msg) {
+  console.log(`  "${msg.substr(0, 80)}"`);
+
   try {
     msg = msg.replace(':eight_spoked_asterisk:', '✳️');
     msg = msg.replace(':thumbsup:', '👍');
@@ -116,32 +119,39 @@ function handleMessage(body) {
   const keys = Object.keys(body);
   const action = body.action;
 
-  console.log(`Received JSON with: ${keys} -- action = ${action}`);
+  console.log(`Keys: ${keys}`);
+  console.log(` Action: ${action}`);
 
   // Ignore private repos
   if (body.repository.private) {
-    console.log(`Ignoring private repo: ${body.repository.name}`);
+    console.log(` Ignoring private repo: ${body.repository.name}`);
     return;
   }
 
   // Ignore some actions
-  if (ignoreActions.indexOf(action) !== -1)
+  if (ignoreActions.indexOf(action) !== -1) {
+    console.log(` Ignoring action: ${action}`);
     return;
+  }
 
   // Ignore some payloads (detected by containing certain keys)
   for (const key of ignoreKeys) {
-    if (keys.indexOf(key) !== -1)
+    if (keys.indexOf(key) !== -1) {
+      console.log(` Ignoring payload with key: ${key}`);
       return;
+    }
   }
 
   // Ignore bot
-  if (body && body.sender && body.sender.login === 'DrahtBot')
+  if (body && body.sender && body.sender.login === 'DrahtBot') {
+    console.log(' Ignoring DrahtBot');
     return;
+  }
 
   // Special case for GUI repo
   const isGUI = (body.repository && body.repository.full_name === 'bitcoin-core/gui');
   if (isGUI)
-    console.log('repo is GUI');
+    console.log(' Repo is GUI');
 
   // Only way to know what type of payload GitHub sent us is to check all the
   // keys in the object. Some have more than one so we need to check in order.
@@ -162,60 +172,65 @@ function handleMessage(body) {
 }
 
 function handlePush(body) {
-  console.log('ignoring push-commits');
-  breturn;
-
-  if (body.deleted)
-    return;
-
-  const ref = body.ref.split('/').slice(-1)[0];
-  const repo = body.repository.full_name;
-  const msg = body.head_commit.message;
-  const user = body.sender.login;
-  const url = body.compare;
-
-  slack(
-    `:eight_spoked_asterisk: ${user} pushed commits to a branch:`
-    + ` ${repo}:${ref}\n(${url})\n${msg}`);
+  console.log(' Ignoring push-commits');
+  return;
 }
 
 function handleReview(body, action) {
+  console.log(' Handling review');
   const user = body.sender.login;
   const url = body.pull_request.html_url;
   const title = body.pull_request.title;
-  let msg;
+  let msg = '';
 
   // Comment text is either in a "comment" or a "review" object
-  if (body.comment) {
-    msg = trimMsg(body.comment.body);
-  } else {
-    msg = trimMsg(body.review.body);
+  if (body.comment && body.comment.body) {
+    console.log('  body comment');
+    msg += trimMsg(body.comment.body);
   }
 
-  if (action === 'submitted' && body.review.state === 'approved') {
-    slack(`:thumbsup: ${user} approved a pull request: "${title}"\n(${url})\n${msg}`);
-  } else if (
-      action === 'submitted'
-      && body.review.state === 'changes_requested') {
-    slack(
-      `:thinking_face: ${user} requested changes to a pull request:`
-      + ` "${title}"\n(${url})\n${msg}`);
+  if (body.review && body.review.body) {
+    console.log('  body review');
+    msg += trimMsg(body.review.body);
+  }
+
+  if (action === 'submitted') {
+    switch (body.review.state) {
+      case 'approved':
+        slack(`:thumbsup: ${user} approved a pull request: "${title}"\n(${url})\n${msg}`);
+        break;
+      case 'changes_requested':
+        slack(`:thinking_face: ${user} requested changes to a pull request: "${title}"\n(${url})\n${msg}`);
+        break;
+      case 'commented':
+        slack(`:thinking_face: ${user} reviewed a pull request: "${title}"\n(${url})\n${msg}`);
+        break;
+      default:
+        slack(`${user} ${body.review.state} to a pull request: "${title}"\n(${url})\n${msg}`);
+    }
+  } else {
+    console.log('  review action is not "submitted"');
   }
 }
 
 function handleComment(body, action) {
+  console.log(' Handling comment');
   const user = body.sender.login;
 
   let thing;
   let url;
   let title;
-  let msg;
+  let msg = '';
 
   // Comment text is either in a "comment" or a "review" object
-  if (body.comment) {
-    msg = trimMsg(body.comment.body);
-  } else {
-    msg = trimMsg(body.review.body);
+  if (body.comment && body.comment.body) {
+    console.log('  body comment');
+    msg += trimMsg(body.comment.body);
+  }
+
+  if (body.review && body.review.body) {
+    console.log('  body review');
+    msg += trimMsg(body.review.body);
   }
 
   // What's being commented ON is either an issue or a pull request
@@ -231,19 +246,12 @@ function handleComment(body, action) {
     thing = 'pull request';
   }
 
-  // Ignore comments from the CI
-  if (
-    msg.indexOf('# [Codecov]') === -1 &&
-    msg.indexOf('## Pull Request Test Coverage Report') === -1
-  ) {
-
-    slack(
-      `:speech_balloon: ${user} commented on ${thing}`
-      + ` "${title}":\n(${url})\n${msg}`);
-  }
+  slack(
+    `:speech_balloon: ${user} commented on ${thing} "${title}":\n(${url})\n${msg}`);
 }
 
 function handlePR(body, action) {
+  console.log(' Handling PR');
   const url = body.pull_request.html_url;
   const title = body.pull_request.title;
 
@@ -256,35 +264,26 @@ function handlePR(body, action) {
       if (body.pull_request.merged) {
         slack(`:merged: ${user} merged a pull request: "${title}"\n(${url})`);
       } else {
-        slack(
-          `:white_check_mark: ${user} closed a pull request:`
-          + ` "${title}"\n(${url})`);
+        slack(`:white_check_mark: ${user} closed a pull request: "${title}"\n(${url})`);
       }
       break;
     case 'edited':
-      slack(
-        `:leftwards_arrow_with_hook: ${user} edited a pull request:`
-        + ` "${title}"\n(${url})`);
+      slack(`:leftwards_arrow_with_hook: ${user} edited a pull request: "${title}"\n(${url})`);
       break;
     case 'synchronize':
-      slack(
-        `:leftwards_arrow_with_hook: ${user} synchronized a pull request:`
-        + ` "${title}"\n(${url})`);
+      slack(`:leftwards_arrow_with_hook: ${user} synchronized a pull request: "${title}"\n(${url})`);
       break;
     case 'ready_for_review':
-      slack(
-        `:wave: ${user}'s pull request is ready for review:`
-        + ` "${title}"\n(${url})`);
+      slack(`:wave: ${user}'s pull request is ready for review: "${title}"\n(${url})`);
       break;
     default:
-      slack(
-        `:memo: ${user} ${action} a pull request:`
-        + ` "${title}"\n(${url})\n${msg}`);
+      slack(`:memo: ${user} ${action} a pull request: "${title}"\n(${url})\n${msg}`);
       break;
   }
 }
 
 function handleIssue(body, action) {
+  console.log(' Handling issue');
   const url = body.issue.html_url;
   const title = body.issue.title;
 
@@ -294,29 +293,22 @@ function handleIssue(body, action) {
 
   switch (action) {
     case 'closed':
-      slack(
-        `:white_check_mark: ${user} closed an issue:`
-        + ` "${title}"\n(${url})`);
+      slack(`:white_check_mark: ${user} closed an issue: "${title}"\n(${url})`);
       break;
     case 'locked':
-      slack(
-        `:lock: ${user} locked an issue:`
-        + ` "${title}"\n(${url})`);
+      slack(`:lock: ${user} locked an issue: "${title}"\n(${url})`);
       break;
     case 'unlocked':
-      slack(
-        `:unlock: ${user} unlocked an issue:`
-        + ` "${title}"\n(${url})`);
+      slack(`:unlock: ${user} unlocked an issue: "${title}"\n(${url})`);
       break;
     default:
-      slack(
-        `:warning: ${user} ${action} an issue:`
-        + ` "${title}"\n(${url})\n${msg}`);
+      slack(`:warning: ${user} ${action} an issue: "${title}"\n(${url})\n${msg}`);
       break;
   }
 }
 
 function handleFork(body, action) {
+  console.log(' Handling fork;)');
   const url = body.forkee.html_url;
   const title = body.forkee.name;
 
@@ -329,5 +321,5 @@ function trimMsg(msg) {
   if (msg)
     return msg.length < 500 ? msg : (msg.substring(0,500) + '\n...');
   else
-    return msg;
+    return '';
 }
