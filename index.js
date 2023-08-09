@@ -8,7 +8,9 @@ const {
   password,
   slakckbotPath,
   port,
-  telegrambot
+  telegrambot,
+  // eslint-disable-next-line camelcase
+  chat_id
 } = require('./config');
 
 // ** CUSTOM SETTINGS **
@@ -84,7 +86,7 @@ async function slack(msg) {
 
     telegram(msg);
   } catch (e) {
-    ;
+    console.log(`telegram error: ${e}`);
   }
 
   try {
@@ -179,19 +181,30 @@ function handlePush(body) {
 function handleReview(body, action) {
   console.log(' Handling review');
   const user = body.sender.login;
-  const url = body.pull_request.html_url;
   const title = body.pull_request.title;
+  let url = body.pull_request.html_url;
   let msg = '';
 
   // Comment text is either in a "comment" or a "review" object
   if (body.comment && body.comment.body) {
     console.log('  body comment');
     msg += trimMsg(body.comment.body);
+
+    if (body.comment.html_url)
+      url = body.comment.html_url;
   }
 
   if (body.review && body.review.body) {
     console.log('  body review');
     msg += trimMsg(body.review.body);
+
+    if (body.review.html_url)
+      url = body.review.html_url;
+  }
+
+  if (!msg.length) {
+    console.log('  Ignoring empty msg');
+    return;
   }
 
   if (action === 'submitted') {
