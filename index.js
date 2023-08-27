@@ -1,7 +1,7 @@
 /* eslint max-len: off */
 'use strict';
 
-const irc = require('irc');
+const irc = require('irc-upd');
 const request = require('request');
 const bweb = require('bweb');
 const { Client } = require('bcurl');
@@ -69,6 +69,7 @@ const IRCCLIENT = new irc.Client(ircConfig.server, ircConfig.nick, {
     password: ircConfig.password,
     debug: true,
     showErrors: true,
+    autoRejoin: true,
     sasl: true
 });
 
@@ -78,6 +79,9 @@ IRCCLIENT.addListener('join', (message='') => {
 
 IRCCLIENT.addListener('error', (message='') => {
     console.log('IRC error:', message);
+});
+IRCCLIENT.addListener('register', (message='') => {
+    console.log('register:', message);
 });
 
 IRCCLIENT.addListener('message', (from='', to='', message='') => {
