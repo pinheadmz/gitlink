@@ -65,7 +65,8 @@ const IRCCLIENT = new irc.Client(ircConfig.server, ircConfig.nick, {
     channels: [ircConfig.channel],
     password: ircConfig.password,
     debug: true,
-    showErrors: true
+    showErrors: true,
+    sasl: true
 });
 
 IRCCLIENT.addListener('join', (message) => {
