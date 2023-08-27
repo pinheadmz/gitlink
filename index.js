@@ -69,12 +69,16 @@ const IRCCLIENT = new irc.Client(ircConfig.server, ircConfig.nick, {
     sasl: true
 });
 
-IRCCLIENT.addListener('join', (message) => {
-    console.log('Joined IRC channel');
+IRCCLIENT.addListener('join', (message='') => {
+    console.log('Joined IRC channel', message);
 });
 
-IRCCLIENT.addListener('error', (message) => {
+IRCCLIENT.addListener('error', (message='') => {
     console.log('IRC error:', message);
+});
+
+IRCCLIENT.addListener('message', (from='', to='', message='') => {
+    console.log('IRC message:', from, to, message);
 });
 
 // send messages to slackbot
