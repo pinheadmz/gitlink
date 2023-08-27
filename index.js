@@ -1,6 +1,7 @@
 /* eslint max-len: off */
 'use strict';
 
+const irc = require('irc');
 const request = require('request');
 const bweb = require('bweb');
 const { Client } = require('bcurl');
@@ -10,7 +11,8 @@ const {
   port,
   telegrambot,
   // eslint-disable-next-line camelcase
-  chat_id
+  chat_id,
+  irc: ircConfig
 } = require('./config');
 
 // ** CUSTOM SETTINGS **
@@ -59,6 +61,17 @@ server.post('/', (req, res) => {
 
 server.open();
 
+const IRCCLIENT = new irc.Client(ircConfig.server, ircConfig.nick, {
+    channels: [ircConfig.channel],
+    password: ircConfig.password,
+    debug: true,
+    showErrors: true
+});
+
+IRCCLIENT.addListener('join', (message) => {
+    console.log('Joined IRC channel');
+});
+
 // send messages to slackbot
 const curlClient = new Client({
   path: slakckbotPath,
@@ -85,6 +98,7 @@ async function slack(msg) {
     msg = msg.replace(':speech_balloon:', '💬');
 
     telegram(msg);
+    sendirc(msg);
   } catch (e) {
     console.log(`telegram error: ${e}`);
   }
@@ -114,6 +128,10 @@ function telegram(msg) {
         console.error('error:', error);
     }
   );
+}
+
+function sendirc(msg) {
+  IRCCLIENT.say(ircConfig.channel, msg);
 }
 
 // Handle all incoming messages
