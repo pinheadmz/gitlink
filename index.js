@@ -73,6 +73,10 @@ IRCCLIENT.addListener('join', (message) => {
     console.log('Joined IRC channel');
 });
 
+IRCCLIENT.addListener('error', (message) => {
+    console.log('IRC error:', message);
+});
+
 // send messages to slackbot
 const curlClient = new Client({
   path: slakckbotPath,
