@@ -63,6 +63,9 @@ server.open();
 
 const IRCCLIENT = new irc.Client(ircConfig.server, ircConfig.nick, {
     channels: [ircConfig.channel],
+    userName: ircConfig.user,
+    realName: ircConfig.nick,
+    nick: ircConfig.nick,
     password: ircConfig.password,
     debug: true,
     showErrors: true,
