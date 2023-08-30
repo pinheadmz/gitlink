@@ -114,7 +114,6 @@ async function slack(msg) {
     msg = msg.replace(':speech_balloon:', '💬');
 
     telegram(msg);
-    sendirc(msg);
   } catch (e) {
     console.log(`telegram error: ${e}`);
   }
@@ -147,7 +146,11 @@ function telegram(msg) {
 }
 
 function sendirc(msg) {
-  IRCCLIENT.say(ircConfig.channel, msg);
+  try {
+    IRCCLIENT.say(ircConfig.channel, msg);
+  } catch (e) {
+    console.log(`send irc failed: ${e}`);
+  }
 }
 
 // Handle all incoming messages
@@ -310,8 +313,10 @@ function handlePR(body, action) {
     case 'closed':
       if (body.pull_request.merged) {
         slack(`:merged: ${user} merged a pull request: "${title}"\n(${url})`);
+        sendirc(`${user} merged pull request: "${title}" (${url})`);
       } else {
         slack(`:white_check_mark: ${user} closed a pull request: "${title}"\n(${url})`);
+        sendirc(`${user} closed pull request: "${title}" (${url})`);
       }
       break;
     case 'edited':
@@ -323,6 +328,9 @@ function handlePR(body, action) {
     case 'ready_for_review':
       slack(`:wave: ${user}'s pull request is ready for review: "${title}"\n(${url})`);
       break;
+    case 'opened':
+      slack(`:memo: ${user} opened a pull request: "${title}"\n(${url})\n${msg}`);
+      sendirc(`${user} opened pull request: "${title}" (${url})`);
     default:
       slack(`:memo: ${user} ${action} a pull request: "${title}"\n(${url})\n${msg}`);
       break;
