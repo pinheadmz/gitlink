@@ -331,6 +331,7 @@ function handlePR(body, action) {
     case 'opened':
       slack(`:memo: ${user} opened a pull request: "${title}"\n(${url})\n${msg}`);
       sendirc(`${user} opened pull request: "${title}" (${url})`);
+      break;
     default:
       slack(`:memo: ${user} ${action} a pull request: "${title}"\n(${url})\n${msg}`);
       break;
