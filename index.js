@@ -10,6 +10,10 @@ const {
   slakckbotPath,
   port,
   telegrambot,
+  modbot,
+  modchat,
+  gptapikey,
+  gptasst,
   // eslint-disable-next-line camelcase
   chat_id,
   irc: ircConfig
@@ -67,7 +71,7 @@ const IRCCLIENT = new irc.Client(ircConfig.server, ircConfig.nick, {
     realName: ircConfig.nick,
     nick: ircConfig.nick,
     password: ircConfig.password,
-    debug: true,
+    debug: false,
     showErrors: true,
     autoRejoin: true,
     sasl: true
@@ -140,9 +144,61 @@ function telegram(msg) {
     },
     (error, response, body) => {
       if (error)
-        console.error('error:', error);
+        console.error('telegram error:', error);
     }
   );
+}
+
+function moderate(url, prompt) {
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${gptapikey}`,
+    'OpenAI-Beta': 'assistants=v2'
+  };
+
+  let line = '';
+  let answer;
+  request.post(
+    {
+      url: 'https://api.openai.com/v1/threads/runs',
+      headers,
+      json: true,
+      body: {
+        stream: true,
+        assistant_id: gptasst,
+        thread: {
+          'messages': [{role: 'user', content: prompt}]
+        }
+      }
+    }
+  )
+  .on('error', e => console.log(e))
+  .on('data', (chunk) => {
+    line += chunk.toString('ascii');
+  })
+  .on('end', () => {
+    line = line.split('thread.message.completed')[1];
+    line = line.split('event:')[0];
+    line = line.split('data:')[1];
+    answer = JSON.parse(line).content[0].text.value;
+
+    const data = ({
+      chat_id: modchat,
+      text: `${answer}:\n${url}\n${trimMsg(prompt)}`,
+      disable_web_page_preview: 'true'
+    });
+    request.post(
+      modbot,
+      {
+        json: true,
+        body: data
+      },
+      (error, response, body) => {
+        if (error)
+          console.error('modchat error:', error);
+      }
+    );
+  });
 }
 
 function sendirc(msg) {
@@ -221,11 +277,13 @@ function handleReview(body, action) {
   const title = body.pull_request.title;
   let url = body.pull_request.html_url;
   let msg = '';
+  let prompt =  '';
 
   // Comment text is either in a "comment" or a "review" object
   if (body.comment && body.comment.body) {
     console.log('  body comment');
     msg += trimMsg(body.comment.body);
+    prompt += body.comment.body;
 
     if (body.comment.html_url)
       url = body.comment.html_url;
@@ -234,6 +292,7 @@ function handleReview(body, action) {
   if (body.review && body.review.body) {
     console.log('  body review');
     msg += trimMsg(body.review.body);
+    prompt += body.review.body;
 
     if (body.review.html_url)
       url = body.review.html_url;
@@ -243,6 +302,8 @@ function handleReview(body, action) {
     console.log('  Ignoring empty msg');
     return;
   }
+
+  moderate(url, prompt);
 
   if (action === 'submitted') {
     switch (body.review.state) {
@@ -271,16 +332,19 @@ function handleComment(body, action) {
   let url;
   let title;
   let msg = '';
+  let prompt = '';
 
   // Comment text is either in a "comment" or a "review" object
   if (body.comment && body.comment.body) {
     console.log('  body comment');
     msg += trimMsg(body.comment.body);
+    prompt += body.comment.body;
   }
 
   if (body.review && body.review.body) {
     console.log('  body review');
     msg += trimMsg(body.review.body);
+    prompt += body.review.body;
   }
 
   // What's being commented ON is either an issue or a pull request
@@ -296,6 +360,8 @@ function handleComment(body, action) {
     thing = 'pull request';
   }
 
+  moderate(url, prompt);
+
   slack(
     `:speech_balloon: ${user} commented on ${thing} "${title}":\n(${url})\n${msg}`);
 }
@@ -308,6 +374,9 @@ function handlePR(body, action) {
   const user = body.sender.login;
 
   const msg = trimMsg(body.pull_request.body);
+  const prompt = body.pull_request.body;
+
+  moderate(url, prompt);
 
   switch(action) {
     case 'closed':
@@ -346,6 +415,9 @@ function handleIssue(body, action) {
   const user = body.sender.login;
 
   const msg = trimMsg(body.issue.body);
+  const prompt = body.issue.body;
+
+  moderate(url, prompt);
 
   switch (action) {
     case 'closed':
