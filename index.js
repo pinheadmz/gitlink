@@ -198,7 +198,7 @@ function moderate(url, prompt) {
         if (error) {
           console.error(' modchat error:', error);
         } else {
-          console.log(` modchat response body: ${body}`);
+          console.log(` modchat response body: ${JSON.stringify(body)}`);
         }
       }
     );
