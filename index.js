@@ -176,9 +176,26 @@ function moderate(url, prompt) {
     line += chunk.toString('ascii');
   })
   .on('end', () => {
-    line = line.split('thread.message.completed')[1];
-    line = line.split('event:')[0];
-    line = line.split('data:')[1];
+    let parts = line.split('thread.message.completed');
+    if (parts.length > 1) {
+      line = parts[1];
+    } else {
+      console.log(`  no thread.message.completed in:\n${parts}`);
+      return;
+    }
+    parts = line.split('event:');
+    if (parts.length > 1) {
+      line = parts[0];
+    } else {
+      console.log(`  no event in:\n${parts}`);
+      return;
+    }
+    parts = line.split('data:');
+    if (parts.length > 1) {
+      line = parts[1];
+    } else {
+      console.log(`  no data in:\n${parts}`);
+    }
     const answer = JSON.parse(line).content[0].text.value;
 
     console.log(`  moderation answer: ${answer}`);
