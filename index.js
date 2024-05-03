@@ -181,7 +181,7 @@ function moderate(url, prompt) {
     line = line.split('data:')[1];
     const answer = JSON.parse(line).content[0].text.value;
 
-    console.log(` moderation answer: ${answer}`);
+    console.log(`  moderation answer: ${answer}`);
 
     if (answer === 'OK')
       return;
