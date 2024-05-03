@@ -157,7 +157,6 @@ function moderate(url, prompt) {
   };
 
   let line = '';
-  let answer;
   request.post(
     {
       url: 'https://api.openai.com/v1/threads/runs',
@@ -180,7 +179,9 @@ function moderate(url, prompt) {
     line = line.split('thread.message.completed')[1];
     line = line.split('event:')[0];
     line = line.split('data:')[1];
-    answer = JSON.parse(line).content[0].text.value;
+    const answer = JSON.parse(line).content[0].text.value;
+
+    console.log(` moderation answer: ${answer}`);
 
     const data = ({
       chat_id: modchat,
@@ -194,8 +195,11 @@ function moderate(url, prompt) {
         body: data
       },
       (error, response, body) => {
-        if (error)
-          console.error('modchat error:', error);
+        if (error) {
+          console.error(' modchat error:', error);
+        } else {
+          console.log(` modchat response body: ${body}`);
+        }
       }
     );
   });
