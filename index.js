@@ -183,6 +183,9 @@ function moderate(url, prompt) {
 
     console.log(` moderation answer: ${answer}`);
 
+    if (answer === 'OK')
+      return;
+
     const data = ({
       chat_id: modchat,
       text: `${answer}:\n${url}\n${trimMsg(prompt)}`,
