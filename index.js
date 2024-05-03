@@ -381,8 +381,6 @@ function handlePR(body, action) {
   const msg = trimMsg(body.pull_request.body);
   const prompt = body.pull_request.body;
 
-  moderate(url, prompt);
-
   switch(action) {
     case 'closed':
       if (body.pull_request.merged) {
@@ -405,6 +403,7 @@ function handlePR(body, action) {
     case 'opened':
       slack(`:memo: ${user} opened a pull request: "${title}"\n(${url})\n${msg}`);
       sendirc(`${user} opened pull request: "${title}" (${url})`);
+      moderate(url, prompt);
       break;
     default:
       slack(`:memo: ${user} ${action} a pull request: "${title}"\n(${url})\n${msg}`);
@@ -422,8 +421,6 @@ function handleIssue(body, action) {
   const msg = trimMsg(body.issue.body);
   const prompt = body.issue.body;
 
-  moderate(url, prompt);
-
   switch (action) {
     case 'closed':
       slack(`:white_check_mark: ${user} closed an issue: "${title}"\n(${url})`);
@@ -436,6 +433,7 @@ function handleIssue(body, action) {
       break;
     default:
       slack(`:warning: ${user} ${action} an issue: "${title}"\n(${url})\n${msg}`);
+      moderate(url, prompt);
       break;
   }
 }
