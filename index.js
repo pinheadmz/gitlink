@@ -176,27 +176,19 @@ function moderate(url, prompt) {
     line += chunk.toString('ascii');
   })
   .on('end', () => {
-    let parts = line.split('thread.message.completed');
-    if (parts.length > 1) {
-      line = parts[1];
-    } else {
-      console.log(`  no thread.message.completed in:\n${parts}`);
+    let answer;
+    try {
+      let parts = line.split('thread.message.completed')[1];
+      parts = line.split('event:')[0];
+      parts = line.split('data:')[1];
+      answer = JSON.parse(parts).content[0].text.value;
+    } catch (e) {
+      console.log('Unable to parse GPT response due to error:');
+      console.log(e);
+      console.log('Complete GPT run:');
+      console.log(line);
       return;
     }
-    parts = line.split('event:');
-    if (parts.length > 1) {
-      line = parts[0];
-    } else {
-      console.log(`  no event in:\n${parts}`);
-      return;
-    }
-    parts = line.split('data:');
-    if (parts.length > 1) {
-      line = parts[1];
-    } else {
-      console.log(`  no data in:\n${parts}`);
-    }
-    const answer = JSON.parse(line).content[0].text.value;
 
     console.log(`  moderation answer: ${answer}`);
 
