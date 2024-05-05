@@ -38,59 +38,63 @@ const ignoreKeys = [
 ];
 // *********************
 
-// Create server to listen for webhooks
-const server = bweb.server({
-  host: '0.0.0.0',
-  port,
-  sockets: false
-});
+let server, IRCCLIENT;
 
-server.use(server.basicAuth({
-  password: password
-}));
-server.use(server.bodyParser({
-  type: 'json'
-}));
-server.use(server.router());
+if (require.main === module) {
+  // Create server to listen for webhooks
+  server = bweb.server({
+    host: '0.0.0.0',
+    port,
+    sockets: false
+  });
 
-server.on('error', (err) => {
-  console.error(err.stack);
-});
+  server.use(server.basicAuth({
+    password: password
+  }));
+  server.use(server.bodyParser({
+    type: 'json'
+  }));
+  server.use(server.router());
 
-server.post('/', (req, res) => {
-  const { body } = req;
-  handleMessage(body);
-  res.send(200, 'ok', 'html');
-});
+  server.on('error', (err) => {
+    console.error(err.stack);
+  });
 
-server.open();
+  server.post('/', (req, res) => {
+    const { body } = req;
+    handleMessage(body);
+    res.send(200, 'ok', 'html');
+  });
 
-const IRCCLIENT = new irc.Client(ircConfig.server, ircConfig.nick, {
-    channels: [ircConfig.channel],
-    userName: ircConfig.user,
-    realName: ircConfig.nick,
-    nick: ircConfig.nick,
-    password: ircConfig.password,
-    debug: false,
-    showErrors: true,
-    autoRejoin: true,
-    sasl: true
-});
+  server.open();
 
-IRCCLIENT.addListener('join', (message='') => {
-    console.log('Joined IRC channel', message);
-});
+  IRCCLIENT = new irc.Client(ircConfig.server, ircConfig.nick, {
+      channels: [ircConfig.channel],
+      userName: ircConfig.user,
+      realName: ircConfig.nick,
+      nick: ircConfig.nick,
+      password: ircConfig.password,
+      debug: false,
+      showErrors: true,
+      autoRejoin: true,
+      sasl: true
+  });
 
-IRCCLIENT.addListener('error', (message='') => {
-    console.log('IRC error:', message);
-});
-IRCCLIENT.addListener('register', (message='') => {
-    console.log('register:', message);
-});
+  IRCCLIENT.addListener('join', (message='') => {
+      console.log('Joined IRC channel', message);
+  });
 
-IRCCLIENT.addListener('message', (from='', to='', message='') => {
-    console.log('IRC message:', from, to, message);
-});
+  IRCCLIENT.addListener('error', (message='') => {
+      console.log('IRC error:', message);
+  });
+  IRCCLIENT.addListener('register', (message='') => {
+      console.log('register:', message);
+  });
+
+  IRCCLIENT.addListener('message', (from='', to='', message='') => {
+      console.log('IRC message:', from, to, message);
+  });
+}
 
 // send messages to slackbot
 const curlClient = new Client({
@@ -149,7 +153,7 @@ function telegram(msg) {
   );
 }
 
-function moderate(url, prompt) {
+function moderate(url, prompt, telegram = true) {
   const headers = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${gptapikey}`,
@@ -178,10 +182,13 @@ function moderate(url, prompt) {
   .on('end', () => {
     let answer;
     try {
-      let parts = line.split('thread.message.completed')[1];
-      parts = line.split('event:')[0];
-      parts = line.split('data:')[1];
-      answer = JSON.parse(parts).content[0].text.value;
+      const parts = line.split('\n');
+      const eventIndex = parts.indexOf('event: thread.message.completed');
+      if (eventIndex === -1)
+        throw new Error('No thread.message.completed event');
+      const data = parts[eventIndex + 1];
+      const json = data.split('data:')[1];
+      answer = JSON.parse(json).content[0].text.value;
     } catch (e) {
       console.log('Unable to parse GPT response due to error:');
       console.log(e);
@@ -192,7 +199,7 @@ function moderate(url, prompt) {
 
     console.log(`  moderation answer: ${answer}`);
 
-    if (answer === 'OK')
+    if (answer === 'OK' || !telegram)
       return;
 
     const data = ({
@@ -463,3 +470,5 @@ function trimMsg(msg) {
   else
     return '';
 }
+
+module.exports = moderate;
