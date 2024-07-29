@@ -199,7 +199,7 @@ function moderate(url, prompt, telegram = true) {
 
     console.log(`  moderation answer: ${answer}`);
 
-    if (answer === 'OK' || !telegram)
+    if (answer.startsWith('OK') || !telegram)
       return;
 
     const data = ({
