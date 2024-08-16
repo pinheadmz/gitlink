@@ -374,11 +374,16 @@ function handleComment(body, action) {
     url = body.comment.html_url;
     title = body.issue.title;
     thing = body.issue.pull_request ? 'pull request' : 'issue';
-  } else {
+  } else if (body.pull_request) {
     // ...but PR "review" comments get caught here
     url = body.comment.html_url;
     title = body.pull_request.title;
     thing = 'pull request';
+  } else {
+    // Misc comments like on commits
+    url = body.comment.html_url;
+    title = '';
+    thing = 'something';
   }
 
   moderate(url, prompt);
