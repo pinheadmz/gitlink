@@ -103,7 +103,7 @@ const curlClient = new Client({
 });
 
 async function slack(msg) {
-  console.log(`  "${msg.substr(0, 80)}"`);
+  // console.log(`  "${msg.substr(0, 80)}"`);
 
   try {
     msg = msg.replace(':eight_spoked_asterisk:', '✳️');
@@ -197,7 +197,8 @@ function moderate(url, prompt, telegram = true) {
       return;
     }
 
-    console.log(`  moderation answer: ${answer}`);
+    // console.log(`\n---\n${prompt}\n---\n`);
+    console.log(`  moderation answer: ${answer}\n\n`);
 
     if (answer.startsWith('OK') || !telegram)
       return;
@@ -301,13 +302,19 @@ function handleReview(body, action) {
   let prompt =  '';
 
   // Comment text is either in a "comment" or a "review" object
-  if (body.comment && body.comment.body) {
-    console.log('  body comment');
-    msg += trimMsg(body.comment.body);
-    prompt += body.comment.body;
+  if (body.comment) {
+    if (body.comment.diff_hunk) {
+      prompt += body.comment.diff_hunk + '\n';
+    }
 
-    if (body.comment.html_url)
-      url = body.comment.html_url;
+    if (body.comment.body) {
+      console.log('  body comment');
+      msg += trimMsg(body.comment.body);
+      prompt += body.comment.body;
+
+      if (body.comment.html_url)
+        url = body.comment.html_url;
+    }
   }
 
   if (body.review && body.review.body) {
@@ -356,10 +363,19 @@ function handleComment(body, action) {
   let prompt = '';
 
   // Comment text is either in a "comment" or a "review" object
-  if (body.comment && body.comment.body) {
-    console.log('  body comment');
-    msg += trimMsg(body.comment.body);
-    prompt += body.comment.body;
+  if (body.comment) {
+    if (body.comment.diff_hunk) {
+      prompt += body.comment.diff_hunk + '\n';
+    }
+
+    if (body.comment.body) {
+      console.log('  body comment');
+      msg += trimMsg(body.comment.body);
+      prompt += body.comment.body;
+
+      if (body.comment.html_url)
+        url = body.comment.html_url;
+    }
   }
 
   if (body.review && body.review.body) {
