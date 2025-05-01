@@ -30,7 +30,8 @@ const ignoreActions = [
   'review_request_removed',
   'deleted',
   'milestoned',
-  'demilestoned'
+  'demilestoned',
+  'locked'
 ];
 
 const ignoreKeys = [
