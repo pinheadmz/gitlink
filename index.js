@@ -31,7 +31,8 @@ const ignoreActions = [
   'deleted',
   'milestoned',
   'demilestoned',
-  'locked'
+  'locked',
+  'unlocked'
 ];
 
 const ignoreKeys = [
