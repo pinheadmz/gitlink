@@ -205,9 +205,13 @@ function moderate(url, prompt, telegram = true) {
     if (answer.startsWith('OK') || !telegram)
       return;
 
+    const trimmed = trimMsg(prompt);
+    const chunks = trimmed.split('\n--\n');
+    const quote = chunks.length > 1 ? chunks[1] : chunks[0];
+
     const data = ({
       chat_id: modchat,
-      text: `${answer}:\n${url}\n${trimMsg(prompt)}`,
+      text: `${answer}:\n${url}\n${quote}`,
       disable_web_page_preview: 'true'
     });
     request.post(
@@ -306,7 +310,7 @@ function handleReview(body, action) {
   // Comment text is either in a "comment" or a "review" object
   if (body.comment) {
     if (body.comment.diff_hunk) {
-      prompt += body.comment.diff_hunk + '\n';
+      prompt += body.comment.diff_hunk + '\n--\n';
     }
 
     if (body.comment.body) {
@@ -367,7 +371,7 @@ function handleComment(body, action) {
   // Comment text is either in a "comment" or a "review" object
   if (body.comment) {
     if (body.comment.diff_hunk) {
-      prompt += body.comment.diff_hunk + '\n';
+      prompt += body.comment.diff_hunk + '\n--\n';
     }
 
     if (body.comment.body) {
