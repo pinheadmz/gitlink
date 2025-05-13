@@ -155,12 +155,16 @@ function telegram(msg) {
   );
 }
 
-function moderate(url, prompt, telegram = true) {
+function moderate(url, prompt, hunk = '', telegram = true) {
   const headers = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${gptapikey}`,
     'OpenAI-Beta': 'assistants=v2'
   };
+
+  if (hunk.length) {
+    hunk += '\n\n';
+  }
 
   let line = '';
   request.post(
@@ -172,7 +176,7 @@ function moderate(url, prompt, telegram = true) {
         stream: true,
         assistant_id: gptasst,
         thread: {
-          'messages': [{role: 'user', content: prompt}]
+          'messages': [{role: 'user', content: hunk + prompt}]
         }
       }
     }
@@ -199,19 +203,14 @@ function moderate(url, prompt, telegram = true) {
       return;
     }
 
-    // console.log(`\n---\n${prompt}\n---\n`);
-    console.log(`  moderation answer: ${answer}\n\n`);
+    console.log(`  moderation answer: ${answer}\n`);
 
     if (answer.startsWith('OK') || !telegram)
       return;
 
-    const trimmed = trimMsg(prompt);
-    const chunks = trimmed.split('\n--\n');
-    const quote = chunks.length > 1 ? chunks[1] : chunks[0];
-
     const data = ({
       chat_id: modchat,
-      text: `${answer}:\n${url}\n${quote}`,
+      text: `${answer}:\n${url}\n${trimMsg(prompt)}`,
       disable_web_page_preview: 'true'
     });
     request.post(
@@ -306,11 +305,12 @@ function handleReview(body, action) {
   let url = body.pull_request.html_url;
   let msg = '';
   let prompt =  '';
+  let hunk = '';
 
   // Comment text is either in a "comment" or a "review" object
   if (body.comment) {
     if (body.comment.diff_hunk) {
-      prompt += body.comment.diff_hunk + '\n--\n';
+      hunk += body.comment.diff_hunk + '\n--\n';
     }
 
     if (body.comment.body) {
@@ -337,7 +337,7 @@ function handleReview(body, action) {
     return;
   }
 
-  moderate(url, prompt);
+  moderate(url, prompt, hunk);
 
   if (action === 'submitted') {
     switch (body.review.state) {
@@ -367,11 +367,12 @@ function handleComment(body, action) {
   let title;
   let msg = '';
   let prompt = '';
+  let hunk = '';
 
   // Comment text is either in a "comment" or a "review" object
   if (body.comment) {
     if (body.comment.diff_hunk) {
-      prompt += body.comment.diff_hunk + '\n--\n';
+      hunk += body.comment.diff_hunk + '\n--\n';
     }
 
     if (body.comment.body) {
@@ -408,7 +409,7 @@ function handleComment(body, action) {
     thing = 'something';
   }
 
-  moderate(url, prompt);
+  moderate(url, prompt, hunk);
 
   slack(
     `:speech_balloon: ${user} commented on ${thing} "${title}":\n(${url})\n${msg}`);
