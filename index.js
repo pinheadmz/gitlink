@@ -202,7 +202,6 @@ function moderate(url, prompt, hunk = '', telegram = true) {
         console.log('GPT request error:', error);
         return;
       }
-      console.log(body, body.output[0].content)
       let answer;
       try {
         answer = body.output[0].content[0].text;
