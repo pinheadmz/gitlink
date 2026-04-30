@@ -13,11 +13,34 @@ const {
   modbot,
   modchat,
   gptapikey,
-  gptasst,
   // eslint-disable-next-line camelcase
   chat_id,
   irc: ircConfig
 } = require('./config');
+
+const gptmodel = 'gpt-4o';
+
+const gptinstructions = `
+You will evaluate every prompt against the following policy for behavior and conduct in the Bitcoin Core github repository. Respond only with "OK" if the prompt does not violate the rules defined in this policy, otherwise reply with "needs moderation:" followed by 1 or 2 sentences explaining as briefly as possible why you think the prompt might violate the policy.
+
+You can ignore comments that just contain a hash and one of the following words: ACK NACK crACK utACK. 
+
+Posts that contain a cryptocurrency address or a single word like "bitcoin" are typically spam and can be reported.
+
+It is also acceptable for commenters to simply ping a fellow contributor without additional context using @
+
+Most prompts will be accompanied by a git diff chunk. This is the code change being commented on so you have some context. What's important is the comments following the code changes obey the moderation rules. 
+
+External links to github.com or cirrus-ci.com are always ok
+
+Policy:
+- Comments will be on-topic.
+- Comments will be about ideas, not people.
+- Comments may offer pointed criticism, if it is criticism about specific technical ideas or decisions, not general criticism, or criticism of individuals or groups.
+- Comments will not speculate about peoples motives or capabilities when discussing the merits of their ideas.
+- Comments may discuss difficulties in implementation or problems encountered during the creative process.
+- Comments should maintain a professional tone. Informal language may allowed if it is not offensive and if its meaning is clear.
+`;
 
 // ** CUSTOM SETTINGS **
 const ignoreActions = [
@@ -156,76 +179,66 @@ function telegram(msg) {
 }
 
 function moderate(url, prompt, hunk = '', telegram = true) {
-  const headers = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${gptapikey}`,
-    'OpenAI-Beta': 'assistants=v2'
-  };
-
   if (hunk.length) {
     hunk += '\n\n';
   }
 
-  let line = '';
   request.post(
     {
-      url: 'https://api.openai.com/v1/threads/runs',
-      headers,
+      url: 'https://api.openai.com/v1/responses',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${gptapikey}`
+      },
       json: true,
       body: {
-        stream: true,
-        assistant_id: gptasst,
-        thread: {
-          'messages': [{role: 'user', content: hunk + prompt}]
-        }
+        model: gptmodel,
+        instructions: gptinstructions,
+        input: hunk + prompt
       }
-    }
-  )
-  .on('error', e => console.log(e))
-  .on('data', (chunk) => {
-    line += chunk.toString('ascii');
-  })
-  .on('end', () => {
-    let answer;
-    try {
-      const parts = line.split('\n');
-      const eventIndex = parts.indexOf('event: thread.message.completed');
-      if (eventIndex === -1)
-        throw new Error('No thread.message.completed event');
-      const data = parts[eventIndex + 1];
-      const json = data.split('data:')[1];
-      answer = JSON.parse(json).content[0].text.value;
-    } catch (e) {
-      console.log('Unable to parse GPT response due to error:');
-      console.log(e);
-      console.log('Complete GPT run:');
-      console.log(line);
-      return;
-    }
-
-    console.log(`  moderation answer: ${answer}\n`);
-
-    if (answer.startsWith('OK') || !telegram)
-      return;
-
-    const data = ({
-      chat_id: modchat,
-      text: `${answer}:\n${url}\n${trimMsg(prompt)}`,
-      disable_web_page_preview: 'true'
-    });
-    request.post(
-      modbot,
-      {
-        json: true,
-        body: data
-      },
-      (error, response, body) => {
-        if (error) {
-          console.error(' modchat error:', error);
-        }
+    },
+    (error, response, body) => {
+      if (error) {
+        console.log('GPT request error:', error);
+        return;
       }
-    );
-  });
+      console.log(body, body.output[0].content)
+      let answer;
+      try {
+        answer = body.output[0].content[0].text;
+        if (!answer)
+          throw new Error('Empty answer');
+      } catch (e) {
+        console.log('Unable to parse GPT response due to error:');
+        console.log(e);
+        console.log('Complete GPT response:');
+        console.log(JSON.stringify(body));
+        return;
+      }
+
+      console.log(`  moderation answer: ${answer}\n`);
+
+      if (answer.startsWith('OK') || !telegram)
+        return;
+
+      const data = ({
+        chat_id: modchat,
+        text: `${answer}:\n${url}\n${trimMsg(prompt)}`,
+        disable_web_page_preview: 'true'
+      });
+      request.post(
+        modbot,
+        {
+          json: true,
+          body: data
+        },
+        (err) => {
+          if (err)
+            console.error(' modchat error:', err);
+        }
+      );
+    }
+  );
 }
 
 function sendirc(msg) {
