@@ -61,6 +61,13 @@ const ignoreActions = [
 const ignoreKeys = [
   'changes'
 ];
+
+const unassociatedRoles = [
+  'FIRST_TIMER',
+  'FIRST_TIME_CONTRIBUTOR',
+  'MANNEQUIN',
+  'NONE'
+];
 // *********************
 
 let server, IRCCLIENT;
@@ -248,6 +255,31 @@ function sendirc(msg) {
   }
 }
 
+function getAuthorAssociation(body) {
+  if (body.comment) return body.comment.author_association;
+  if (body.review) return body.review.author_association;
+  if (body.pull_request) return body.pull_request.author_association;
+  if (body.issue) return body.issue.author_association;
+  return null;
+}
+
+function alertUnassociated(url, user, association) {
+  console.log(` Unassociated user (${association}): ${user}`);
+  const data = {
+    chat_id: modchat,
+    text: `Event from unassociated user (${association}): ${user}\n${url}`,
+    disable_web_page_preview: 'true'
+  };
+  request.post(
+    modbot,
+    { json: true, body: data },
+    (err) => {
+      if (err)
+        console.error(' modchat error:', err);
+    }
+  );
+}
+
 // Handle all incoming messages
 function handleMessage(body) {
   const keys = Object.keys(body);
@@ -287,16 +319,19 @@ function handleMessage(body) {
   if (isGUI)
     console.log(' Repo is GUI');
 
+  const authorAssociation = getAuthorAssociation(body);
+  console.log(` Author association: ${authorAssociation}`);
+
   // Only way to know what type of payload GitHub sent us is to check all the
   // keys in the object. Some have more than one so we need to check in order.
   if (keys.indexOf('comment') !== -1)
-    handleComment(body, action);
+    handleComment(body, action, authorAssociation);
   else if (keys.indexOf('review') !== -1)
-    handleReview(body, action);
+    handleReview(body, action, authorAssociation);
   else if (keys.indexOf('pull_request') !== -1)
-    handlePR(body, action);
+    handlePR(body, action, authorAssociation);
   else if (keys.indexOf('issue') !== -1)
-    handleIssue(body, action);
+    handleIssue(body, action, authorAssociation);
   else if (keys.indexOf('forkee') !== -1)
     handleFork(body, action);
   else if (keys.indexOf('base_ref') !== -1 && !isGUI)
@@ -310,7 +345,7 @@ function handlePush(body) {
   return;
 }
 
-function handleReview(body, action) {
+function handleReview(body, action, authorAssociation) {
   console.log(' Handling review');
   const user = body.sender.login;
   const title = body.pull_request.title;
@@ -349,7 +384,10 @@ function handleReview(body, action) {
     return;
   }
 
-  moderate(url, prompt, hunk);
+  if (unassociatedRoles.includes(authorAssociation))
+    alertUnassociated(url, body.sender.login, authorAssociation);
+  else
+    moderate(url, prompt, hunk);
 
   if (action === 'submitted') {
     switch (body.review.state) {
@@ -370,7 +408,7 @@ function handleReview(body, action) {
   }
 }
 
-function handleComment(body, action) {
+function handleComment(body, action, authorAssociation) {
   console.log(' Handling comment');
   const user = body.sender.login;
 
@@ -421,13 +459,16 @@ function handleComment(body, action) {
     thing = 'something';
   }
 
-  moderate(url, prompt, hunk);
+  if (unassociatedRoles.includes(authorAssociation))
+    alertUnassociated(url, user, authorAssociation);
+  else
+    moderate(url, prompt, hunk);
 
   slack(
     `:speech_balloon: ${user} commented on ${thing} "${title}":\n(${url})\n${msg}`);
 }
 
-function handlePR(body, action) {
+function handlePR(body, action, authorAssociation) {
   console.log(' Handling PR');
   const url = body.pull_request.html_url;
   const title = body.pull_request.title;
@@ -459,7 +500,10 @@ function handlePR(body, action) {
     case 'opened':
       slack(`:memo: ${user} opened a pull request: "${title}"\n(${url})\n${msg}`);
       sendirc(`${user} opened pull request: "${title}" (${url})`);
-      moderate(url, prompt);
+      if (unassociatedRoles.includes(authorAssociation))
+        alertUnassociated(url, user, authorAssociation);
+      else
+        moderate(url, prompt);
       break;
     default:
       slack(`:memo: ${user} ${action} a pull request: "${title}"\n(${url})\n${msg}`);
@@ -467,7 +511,7 @@ function handlePR(body, action) {
   }
 }
 
-function handleIssue(body, action) {
+function handleIssue(body, action, authorAssociation) {
   console.log(' Handling issue');
   const url = body.issue.html_url;
   const title = body.issue.title;
@@ -489,7 +533,10 @@ function handleIssue(body, action) {
       break;
     default:
       slack(`:warning: ${user} ${action} an issue: "${title}"\n(${url})\n${msg}`);
-      moderate(url, prompt);
+      if (unassociatedRoles.includes(authorAssociation))
+        alertUnassociated(url, user, authorAssociation);
+      else
+        moderate(url, prompt);
       break;
   }
 }
