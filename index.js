@@ -263,11 +263,12 @@ function getAuthorAssociation(body) {
   return null;
 }
 
-function alertUnassociated(url, user, association) {
+function alertUnassociated(url, user, association, content = '') {
   console.log(` Unassociated user (${association}): ${user}`);
+  const trimmed = trimMsg(content);
   const data = {
     chat_id: modchat,
-    text: `Event from unassociated user (${association}): ${user}\n${url}`,
+    text: `Event from unassociated user (${association}): ${user}\n${url}${trimmed ? '\n' + trimmed : ''}`,
     disable_web_page_preview: 'true'
   };
   request.post(
@@ -385,7 +386,7 @@ function handleReview(body, action, authorAssociation) {
   }
 
   if (unassociatedRoles.includes(authorAssociation))
-    alertUnassociated(url, body.sender.login, authorAssociation);
+    alertUnassociated(url, body.sender.login, authorAssociation, prompt);
   else
     moderate(url, prompt, hunk);
 
@@ -460,7 +461,7 @@ function handleComment(body, action, authorAssociation) {
   }
 
   if (unassociatedRoles.includes(authorAssociation))
-    alertUnassociated(url, user, authorAssociation);
+    alertUnassociated(url, user, authorAssociation, prompt);
   else
     moderate(url, prompt, hunk);
 
@@ -501,7 +502,7 @@ function handlePR(body, action, authorAssociation) {
       slack(`:memo: ${user} opened a pull request: "${title}"\n(${url})\n${msg}`);
       sendirc(`${user} opened pull request: "${title}" (${url})`);
       if (unassociatedRoles.includes(authorAssociation))
-        alertUnassociated(url, user, authorAssociation);
+        alertUnassociated(url, user, authorAssociation, prompt);
       else
         moderate(url, prompt);
       break;
@@ -534,7 +535,7 @@ function handleIssue(body, action, authorAssociation) {
     default:
       slack(`:warning: ${user} ${action} an issue: "${title}"\n(${url})\n${msg}`);
       if (unassociatedRoles.includes(authorAssociation))
-        alertUnassociated(url, user, authorAssociation);
+        alertUnassociated(url, user, authorAssociation, prompt);
       else
         moderate(url, prompt);
       break;
