@@ -335,10 +335,21 @@ function handleMessage(body) {
     handleIssue(body, action, authorAssociation);
   else if (keys.indexOf('forkee') !== -1)
     handleFork(body, action);
+  else if (body.ref && body.ref.startsWith('refs/tags/'))
+    handleTagPush(body);
   else if (keys.indexOf('base_ref') !== -1 && !isGUI)
     handlePush(body);
   else
     return;
+}
+
+function handleTagPush(body) {
+  console.log(' Handling tag push');
+  const tag = body.ref.replace('refs/tags/', '');
+  const user = body.sender.login;
+  const repo = body.repository.full_name;
+  const url = `${body.repository.html_url}/releases/tag/${encodeURIComponent(tag)}`;
+  slack(`🏷️ ${user} tagged ${repo}: ${tag}\n(${url})`);
 }
 
 function handlePush(body) {
