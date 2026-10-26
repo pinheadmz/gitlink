@@ -18,7 +18,7 @@ const {
   irc: ircConfig
 } = require('./config');
 
-const gptmodel = 'gpt-4o';
+const gptmodel = 'gpt-6-sol';
 
 const gptinstructions = `
 You will evaluate every prompt against the following policy for behavior and conduct in the Bitcoin Core github repository. Respond only with "OK" if the prompt does not violate the rules defined in this policy, otherwise reply with "needs moderation:" followed by 1 or 2 sentences explaining as briefly as possible why you think the prompt might violate the policy.
@@ -32,6 +32,8 @@ It is also acceptable for commenters to simply ping a fellow contributor without
 Most prompts will be accompanied by a git diff chunk. This is the code change being commented on so you have some context. What's important is the comments following the code changes obey the moderation rules. 
 
 External links to github.com or cirrus-ci.com are always ok
+
+Generic comments that appear to be LLM-generated or otherwise low quality can be reported.
 
 Policy:
 - Comments will be on-topic.
@@ -211,7 +213,10 @@ function moderate(url, prompt, hunk = '', telegram = true) {
       }
       let answer;
       try {
-        answer = body.output[0].content[0].text;
+        // Reasoning models emit a 'reasoning' item before the 'message' item
+        const message = body.output.find(item => item.type === 'message');
+        const content = message.content.find(c => c.type === 'output_text');
+        answer = content.text;
         if (!answer)
           throw new Error('Empty answer');
       } catch (e) {
