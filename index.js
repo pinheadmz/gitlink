@@ -314,8 +314,9 @@ function handleMessage(body) {
     }
   }
 
-  // Ignore bot
-  if (body && body.sender && body.sender.login === 'DrahtBot') {
+  // Ignore bots
+  const BOTS = ['DrahtBot', 'rreview'];
+  if (body && body.sender && BOTS.includes(body.sender.login)) {
     console.log(' Ignoring DrahtBot');
     return;
   }
