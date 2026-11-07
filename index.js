@@ -25,6 +25,8 @@ You will evaluate every prompt against the following policy for behavior and con
 
 You can ignore comments that just contain a hash and one of the following words: ACK NACK crACK utACK. 
 
+Comments that simply and quickly reply to code reviewer like "done", "taken", "thanks", "fixed", "good call", "same here" and so forth are ok.
+
 Posts that contain a cryptocurrency address or a single word like "bitcoin" are typically spam and can be reported.
 
 It is also acceptable for commenters to simply ping a fellow contributor without additional context using @
