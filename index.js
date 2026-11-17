@@ -105,7 +105,7 @@ if (require.main === module) {
   server.open();
 
   IRCCLIENT = new irc.Client(ircConfig.server, ircConfig.nick, {
-      channels: [ircConfig.channel],
+      channels: ircConfig.channel,
       userName: ircConfig.user,
       realName: ircConfig.nick,
       nick: ircConfig.nick,
@@ -255,10 +255,12 @@ function moderate(url, prompt, hunk = '', telegram = true) {
 }
 
 function sendirc(msg) {
-  try {
-    IRCCLIENT.say(ircConfig.channel, msg);
-  } catch (e) {
-    console.log(`send irc failed: ${e}`);
+  for (const ch of ircConfig.channel) {
+    try {
+      IRCCLIENT.say(ch, msg);
+    } catch (e) {
+      console.log(`send irc failed: ${e}`);
+    }
   }
 }
 
@@ -358,7 +360,7 @@ function handleTagPush(body) {
   const repo = body.repository.full_name;
   const url = `${body.repository.html_url}/releases/tag/${encodeURIComponent(tag)}`;
   slack(`🏷️ ${user} tagged ${repo}: ${tag}\n(${url})`);
-  sendirc(`${user} tagged ${repo}: ${tag}\n(${url})`);
+  sendirc(`${user} tagged ${repo}: ${tag} (${url})`);
 }
 
 function handlePush(body) {
