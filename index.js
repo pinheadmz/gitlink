@@ -358,6 +358,7 @@ function handleTagPush(body) {
   const repo = body.repository.full_name;
   const url = `${body.repository.html_url}/releases/tag/${encodeURIComponent(tag)}`;
   slack(`🏷️ ${user} tagged ${repo}: ${tag}\n(${url})`);
+  sendirc(`${user} tagged ${repo}: ${tag}\n(${url})`);
 }
 
 function handlePush(body) {
