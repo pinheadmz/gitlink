@@ -127,9 +127,9 @@ if (require.main === module) {
       console.log('register:', message);
   });
 
-  IRCCLIENT.addListener('message', (from='', to='', message='') => {
-      console.log('IRC message:', from, to, message);
-  });
+  // IRCCLIENT.addListener('message', (from='', to='', message='') => {
+  //     console.log('IRC message:', from, to, message);
+  // });
 }
 
 // send messages to slackbot
