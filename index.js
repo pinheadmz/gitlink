@@ -72,9 +72,20 @@ const unassociatedRoles = [
   'MANNEQUIN',
   'NONE'
 ];
+
+// We are a backup for this bot in the mutable channels. We only post there
+// if it hasn't announced the same event within BACKUP_DELAY.
+const BACKUP_FOR_NICK = 'bitcoin-git';
+const BACKUP_DELAY = 30 * 1000;
 // *********************
 
 let server, IRCCLIENT;
+
+const mutableChannels = (ircConfig.mutable_channel || []).map(ch => ch.toLowerCase());
+// Messages we are waiting to send to mutable channels: {channel, msg, match, timer}
+const pendingIRC = new Set();
+// Recent messages from BACKUP_FOR_NICK, in case it beats our webhook: {channel, time, text}
+let recentIRC = [];
 
 if (require.main === module) {
   // Create server to listen for webhooks
@@ -105,7 +116,7 @@ if (require.main === module) {
   server.open();
 
   IRCCLIENT = new irc.Client(ircConfig.server, ircConfig.nick, {
-      channels: ircConfig.channel,
+      channels: [...ircConfig.channel, ...(ircConfig.mutable_channel || [])],
       userName: ircConfig.user,
       realName: ircConfig.nick,
       nick: ircConfig.nick,
@@ -113,6 +124,7 @@ if (require.main === module) {
       debug: false,
       showErrors: true,
       autoRejoin: true,
+      stripColors: true,
       sasl: true
   });
 
@@ -127,9 +139,24 @@ if (require.main === module) {
       console.log('register:', message);
   });
 
-  // IRCCLIENT.addListener('message', (from='', to='', message='') => {
-  //     console.log('IRC message:', from, to, message);
-  // });
+  IRCCLIENT.addListener('message#', (from='', to='', text='') => {
+      if (from.toLowerCase() !== BACKUP_FOR_NICK)
+        return;
+      const channel = to.toLowerCase();
+      if (!mutableChannels.includes(channel))
+        return;
+
+      pruneRecentIRC();
+      recentIRC.push({channel, time: Date.now(), text});
+
+      for (const entry of pendingIRC) {
+        if (entry.channel === channel && ircMatches(text, entry.match)) {
+          console.log(`${BACKUP_FOR_NICK} beat us to it in ${channel}: ${text}`);
+          clearTimeout(entry.timer);
+          pendingIRC.delete(entry);
+        }
+      }
+  });
 }
 
 // send messages to slackbot
@@ -254,13 +281,54 @@ function moderate(url, prompt, hunk = '', telegram = true) {
   );
 }
 
-function sendirc(msg) {
-  for (const ch of ircConfig.channel) {
-    try {
-      IRCCLIENT.say(ch, msg);
-    } catch (e) {
-      console.log(`send irc failed: ${e}`);
+function sayirc(ch, msg) {
+  try {
+    IRCCLIENT.say(ch, msg);
+  } catch (e) {
+    console.log(`send irc failed: ${e}`);
+  }
+}
+
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Does a message from BACKUP_FOR_NICK describe the same event?
+// match: {user, url, ref} where ref is e.g. "#1234" or a tag name.
+function ircMatches(text, match) {
+  text = text.toLowerCase();
+  if (match.url && text.includes(match.url.toLowerCase()))
+    return true;
+  if (!match.user || !match.ref)
+    return false;
+  const ref = new RegExp(`(^|\\W)${escapeRegExp(match.ref.toLowerCase())}(\\W|$)`);
+  return text.includes(match.user.toLowerCase()) && ref.test(text);
+}
+
+function pruneRecentIRC() {
+  const cutoff = Date.now() - BACKUP_DELAY;
+  recentIRC = recentIRC.filter(r => r.time >= cutoff);
+}
+
+function sendirc(msg, match) {
+  for (const ch of ircConfig.channel)
+    sayirc(ch, msg);
+
+  pruneRecentIRC();
+  for (const ch of ircConfig.mutable_channel || []) {
+    const channel = ch.toLowerCase();
+    if (recentIRC.some(r => r.channel === channel && ircMatches(r.text, match))) {
+      console.log(` ${BACKUP_FOR_NICK} already announced in ${ch}`);
+      continue;
     }
+
+    const entry = {channel, msg, match};
+    entry.timer = setTimeout(() => {
+      pendingIRC.delete(entry);
+      console.log(` ${BACKUP_FOR_NICK} silent, sending to ${ch}`);
+      sayirc(ch, msg);
+    }, BACKUP_DELAY);
+    pendingIRC.add(entry);
   }
 }
 
@@ -360,7 +428,7 @@ function handleTagPush(body) {
   const repo = body.repository.full_name;
   const url = `${body.repository.html_url}/releases/tag/${encodeURIComponent(tag)}`;
   slack(`🏷️ ${user} tagged ${repo}: ${tag}\n(${url})`);
-  sendirc(`${user} tagged ${repo}: ${tag} (${url})`);
+  sendirc(`${user} tagged ${repo}: ${tag} (${url})`, {user, url, ref: tag});
 }
 
 function handlePush(body) {
@@ -497,6 +565,7 @@ function handlePR(body, action, authorAssociation) {
   const title = body.pull_request.title;
 
   const user = body.sender.login;
+  const ircMatch = {user, url, ref: `#${body.pull_request.number}`};
 
   const msg = trimMsg(body.pull_request.body);
   const prompt = body.pull_request.body;
@@ -505,10 +574,10 @@ function handlePR(body, action, authorAssociation) {
     case 'closed':
       if (body.pull_request.merged) {
         slack(`:merged: ${user} merged a pull request: "${title}"\n(${url})`);
-        sendirc(`${user} merged pull request: "${title}" (${url})`);
+        sendirc(`${user} merged pull request: "${title}" (${url})`, ircMatch);
       } else {
         slack(`:white_check_mark: ${user} closed a pull request: "${title}"\n(${url})`);
-        sendirc(`${user} closed pull request: "${title}" (${url})`);
+        sendirc(`${user} closed pull request: "${title}" (${url})`, ircMatch);
       }
       break;
     case 'edited':
@@ -522,7 +591,7 @@ function handlePR(body, action, authorAssociation) {
       break;
     case 'opened':
       slack(`:memo: ${user} opened a pull request: "${title}"\n(${url})\n${msg}`);
-      sendirc(`${user} opened pull request: "${title}" (${url})`);
+      sendirc(`${user} opened pull request: "${title}" (${url})`, ircMatch);
       if (unassociatedRoles.includes(authorAssociation))
         alertUnassociated(url, user, authorAssociation, prompt);
       else
