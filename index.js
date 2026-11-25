@@ -151,7 +151,8 @@ if (require.main === module) {
 
       for (const entry of pendingIRC) {
         if (entry.channel === channel && ircMatches(text, entry.match)) {
-          console.log(`${BACKUP_FOR_NICK} beat us to it in ${channel}: ${text}`);
+          console.log(`IRC cancelled to ${channel}: ${entry.msg}`);
+          console.log(`  ${BACKUP_FOR_NICK} said: ${text}`);
           clearTimeout(entry.timer);
           pendingIRC.delete(entry);
         }
@@ -284,6 +285,7 @@ function moderate(url, prompt, hunk = '', telegram = true) {
 function sayirc(ch, msg) {
   try {
     IRCCLIENT.say(ch, msg);
+    console.log(`IRC sent to ${ch}: ${msg}`);
   } catch (e) {
     console.log(`send irc failed: ${e}`);
   }
@@ -294,11 +296,20 @@ function escapeRegExp(str) {
 }
 
 // Does a message from BACKUP_FOR_NICK describe the same event?
-// match: {user, url, ref} where ref is e.g. "#1234" or a tag name.
+// match: {user, url, ref, repoRef} where ref is e.g. "#1234" or a tag name,
+// and repoRef is e.g. "bitcoin/bitcoin#1234".
 function ircMatches(text, match) {
   text = text.toLowerCase();
   if (match.url && text.includes(match.url.toLowerCase()))
     return true;
+  // On merge, bitcoin-git first announces the pushed commits, including
+  // "merge-script: Merge bitcoin/bitcoin#1234: ...", before it announces
+  // "merged pull request #1234". The commit author is not the GitHub user.
+  if (match.repoRef) {
+    const repoRef = new RegExp(`(^|\\s)${escapeRegExp(match.repoRef.toLowerCase())}(\\D|$)`);
+    if (repoRef.test(text))
+      return true;
+  }
   if (!match.user || !match.ref)
     return false;
   const ref = new RegExp(`(^|\\W)${escapeRegExp(match.ref.toLowerCase())}(\\W|$)`);
@@ -318,7 +329,7 @@ function sendirc(msg, match) {
   for (const ch of ircConfig.mutable_channel || []) {
     const channel = ch.toLowerCase();
     if (recentIRC.some(r => r.channel === channel && ircMatches(r.text, match))) {
-      console.log(` ${BACKUP_FOR_NICK} already announced in ${ch}`);
+      console.log(` IRC cancelled to ${ch} (${BACKUP_FOR_NICK} already announced): ${msg}`);
       continue;
     }
 
@@ -565,7 +576,12 @@ function handlePR(body, action, authorAssociation) {
   const title = body.pull_request.title;
 
   const user = body.sender.login;
-  const ircMatch = {user, url, ref: `#${body.pull_request.number}`};
+  const ircMatch = {
+    user,
+    url,
+    ref: `#${body.pull_request.number}`,
+    repoRef: `${body.repository.full_name}#${body.pull_request.number}`
+  };
 
   const msg = trimMsg(body.pull_request.body);
   const prompt = body.pull_request.body;
